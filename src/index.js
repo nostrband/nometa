@@ -156,7 +156,10 @@ const renderMeta = (e, p, langs) => {
     const meta = parseMeta(p);
 
     const tags = {
+      type: 'website',
+      twitterType: 'summary',
       siteName: '',
+      userName: '',
       title: '',
       description: '',
       url: '',
@@ -166,29 +169,33 @@ const renderMeta = (e, p, langs) => {
       audios: [],
     }
 
-    tags.siteName = `${meta.display_name || meta.name || nip19.npubEncode(e.pubkey)} on Nostr`
+    const npub = nip19.npubEncode(e.pubkey);
+
+    tags.siteName = `${meta.display_name || meta.name || npub} on Nostr`
+    tags.userName = meta.display_name || meta.name || npub;
+
     if (e.kind === 0) {
-      tags.title = `${meta.display_name || meta.name || 'Profile'} (${nip19.npubEncode(e.pubkey)}) on Nostr`;
+      tags.title = `${meta.display_name || meta.name || 'Profile'} on Nostr (${npub})`;
       tags.description = `${meta.about}`
       tags.images.push(meta.picture);
-      tags.url = `${URL_TMPL.replace("<bech32>", nip19.npubEncode(e.pubkey))}`
+      tags.url = `${URL_TMPL.replace("<bech32>", npub)}`
+      tags.type = "profile";
     } else {
       const getTag = (k) => e.tags.filter(t => t.length > 1 && t[0] === k).map(t => t[1])?.[0] || ''
       const d = getTag('d')
       const id = (e.kind >= 10000 && e.kind < 20000)
         || (e.kind >= 30000 && e.kind < 40000)
         ? nip19.naddrEncode({ pubkey: e.pubkey, identifier: d, kind: e.kind })
-        : nip19.noteEncode(e.id);
-//        : nip19.neventEncode({ id: e.id, relays: [e.relay] });
+        : nip19.neventEncode({ id: e.id, relays: [e.relay] });
+//        : nip19.noteEncode(e.id);
 
-      const name = `${meta.display_name || meta.name || nip19.npubEncode(e.pubkey)}`;
       const title = `${getTag('title') || getTag('name') || ''}`;
       const body = isShortContent(e.kind) ? e.content.substring(0, 200)
         : (getTag('summary') || getTag('description') || getTag('alt') || '');
 
       const type = getKindName(e.kind)
 
-      tags.title = `${name} on Nostr: ${(title || body).substring(0, 60)}...`;
+      tags.title = `${tags.userName} on Nostr: ${(title || body).substring(0, 60)}...`;
       tags.description = `${type}: ${body}`;
       tags.url = `${URL_TMPL.replace("<bech32>", id)}`
 
@@ -211,6 +218,10 @@ const renderMeta = (e, p, langs) => {
         }
       }
 
+      // NOTE: maybe later if we start rendering the 
+      // post image on the server
+      // if (tags.images.length)
+      //   tags.twitterType = "summary_large_image";
     }
 
     // FIXME use 'type=profile' for kind 0
@@ -229,10 +240,11 @@ const renderMeta = (e, p, langs) => {
     <meta property="twitter:description" content="${san(tags.description)}"/>
     <link rel="canonical" href="${san(tags.url)}" />
     <meta property="og:url" content="${san(tags.url)}"/>
-    <meta name="og:type" content="website"/>
+    <meta name="og:type" content="${tags.type}"/>
     <meta name="twitter:site" content="@nostrprotocol" />
-    <meta name="twitter:card" content="${tags.images.length ? "summary" /*_large_image*/ : "summary"}"/>
+    <meta name="twitter:card" content="${tags.twitterType}"/>
     <meta property="og:site_name" content="${san(tags.siteName)}" />
+    <meta property="og:profile:username" content="${san(tags.userName)}" />
     `;
     for (const u of tags.images) {
       result += `
