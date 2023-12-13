@@ -1,0 +1,18 @@
+{
+  "name": "nometa",
+  "version": "0.1.0",
+  "description": "HTTP server printing OpenGraph tags for Nostr apps",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "artur@nostr.band",
+  "license": "MIT",
+  "dependencies": {
+    "@nostr-dev-kit/ndk": "^2.2.0",
+    "express": "^4.18.2",
+    "isomorphic-dompurify": "^1.12.0",
+    "nostr-tools": "^1.17.0",
+    "websocket-polyfill": "^0.0.3"
+  }
+}
