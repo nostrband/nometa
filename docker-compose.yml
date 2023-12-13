@@ -1,0 +1,11 @@
+version: "3.7"
+
+services:
+  nometa:
+    build: .
+    environment:
+      NOMETA_URL_TMPL: http://localhost:11111/<bech32>
+    volumes:
+      - ./test.html:/app/index.html
+    ports:
+      - 11111:11111
