@@ -4,3 +4,12 @@ nometa
 Run:
 
 PORT=11111 NOMETA_ROOT=./ NOMETA_FILE=index.html NOMETA_URL_TMPL="https://yourdomain.com/<bech32>" node src/index.js
+
+
+Existing meta tags in your index.html must be wrapped this way:
+
+<meta name="nometa_start"/>
+... your default meta tags...
+<meta name="nometa_end"/>
+
+This server will replace the wrapped region with event meta tags.

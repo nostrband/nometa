@@ -5,7 +5,8 @@ const { nip19 } = require('nostr-tools')
 const { readFile } = require('node:fs/promises');
 const DOMPurify = require('isomorphic-dompurify');
 
-const TMPL = '<!--%META%-->';
+// s flag to match newlines
+const TMPL_RX = /<meta name="nometa_start"\/>.+<meta name="nometa_end"\/>/s;
 const PORT = process.env.PORT;
 const ROOT = process.env.NOMETA_ROOT;
 const FILE = process.env.NOMETA_FILE;
@@ -141,11 +142,18 @@ function san(s) {
   return DOMPurify.sanitize(s.replace(/[\n\r\t]/g,' '));
 }
 
+const parseMeta = (p) => {
+  try {
+    return JSON.parse(p?.content) || {}
+  } catch {
+    return {}
+  }
+}
 
 const renderMeta = (e, p, langs) => {
   // console.log("render", e.rawEvent(), p.rawEvent(), langs)
   try {
-    const meta = JSON.parse(p.content);
+    const meta = parseMeta(p);
 
     const tags = {
       siteName: '',
@@ -165,21 +173,22 @@ const renderMeta = (e, p, langs) => {
       tags.images.push(meta.picture);
       tags.url = `${URL_TMPL.replace("<bech32>", nip19.npubEncode(e.pubkey))}`
     } else {
-      const getTag = (k) => e.tags.filter(t => t.length > 1 && t[0] === k).map(t => t[1]) || ''
+      const getTag = (k) => e.tags.filter(t => t.length > 1 && t[0] === k).map(t => t[1])?.[0] || ''
       const d = getTag('d')
       const id = (e.kind >= 10000 && e.kind < 20000)
         || (e.kind >= 30000 && e.kind < 40000)
         ? nip19.naddrEncode({ pubkey: e.pubkey, identifier: d, kind: e.kind })
-        : nip19.neventEncode({ id: e.id, relays: [e.relay] });
+        : nip19.noteEncode(e.id);
+//        : nip19.neventEncode({ id: e.id, relays: [e.relay] });
 
       const name = `${meta.display_name || meta.name || nip19.npubEncode(e.pubkey)}`;
-      const title = `${getTag('title') || getTag('name')}`;
+      const title = `${getTag('title') || getTag('name') || ''}`;
       const body = isShortContent(e.kind) ? e.content.substring(0, 200)
-        : (getTag('summary') || getTag('description') || getTag('alt'));
+        : (getTag('summary') || getTag('description') || getTag('alt') || '');
 
       const type = getKindName(e.kind)
 
-      tags.title = `${name}: ${(title || body).substring(0, 70)}...`;
+      tags.title = `${name} on Nostr: ${(title || body).substring(0, 60)}...`;
       tags.description = `${type}: ${body}`;
       tags.url = `${URL_TMPL.replace("<bech32>", id)}`
 
@@ -211,20 +220,24 @@ const renderMeta = (e, p, langs) => {
     let result = `
     <title>${san(tags.title)}</title>
     <meta property="og:title" content="${san(tags.title)}"/>
+    <meta property="twitter:title" content="${san(tags.title)}"/>
     <meta
       name="description"
       content="${san(tags.description)}"
     />
     <meta property="og:description" content="${san(tags.description)}"/>
+    <meta property="twitter:description" content="${san(tags.description)}"/>
     <link rel="canonical" href="${san(tags.url)}" />
     <meta property="og:url" content="${san(tags.url)}"/>
     <meta name="og:type" content="website"/>
-    <meta name="twitter:card" content="${tags.images.length ? "summary_large_image" : "summary"}"/>
+    <meta name="twitter:site" content="@nostrprotocol" />
+    <meta name="twitter:card" content="${tags.images.length ? "summary" /*_large_image*/ : "summary"}"/>
     <meta property="og:site_name" content="${san(tags.siteName)}" />
     `;
     for (const u of tags.images) {
       result += `
     <meta property="twitter:image" content="${san(u)}" />
+    <meta property="twitter:image:alt" content="${san(tags.title)}"
     <meta property="og:image" content="${san(u)}"/>
       `;  
     }
@@ -277,6 +290,8 @@ const fetch = async (req, res, bech32, type, data) => {
       break;
   }
 
+  // FIXME setup ndk cache
+
   // connect to those hinted relays too
   const relaySet = NDKRelaySet.fromRelayUrls([...relays, ...RELAYS], ndk);
   // for (const r of relaySet.relays.values())
@@ -284,6 +299,14 @@ const fetch = async (req, res, bech32, type, data) => {
   const event = await ndk.fetchEvent(filter,
     { groupable: false }, relaySet
   );
+
+  if (!event) {
+    res.sendFile(FILE, {
+      root: ROOT,
+      dotfiles: 'deny'
+    })
+    return    
+  }
 
   let profile = event
   if (event.kind !== 0) {
@@ -304,7 +327,7 @@ const fetch = async (req, res, bech32, type, data) => {
     nip19.npubEncode(event.pubkey), 
     "in", Date.now() - start)
 
-  res.send(file.replace(TMPL, meta))
+  res.send(file.replace(TMPL_RX, meta))
 }
 
 const BECH32_REGEX = /[a-z]{1,83}1[023456789acdefghjklmnpqrstuvwxyz]{6,}/g
