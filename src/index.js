@@ -264,6 +264,15 @@ const renderMeta = (e, p, langs) => {
       `;  
     }
 
+    result += `
+    <script>
+    window.nometaPreloadedEvents = {
+      event: ${JSON.stringify(e.rawEvent())},
+      profile: ${JSON.stringify(p.rawEvent())},
+    };
+    </script>
+    `
+
     return result;
 
   } catch (e) {
