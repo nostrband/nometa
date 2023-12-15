@@ -3,6 +3,7 @@ const { default: NDK, NDKRelaySet, NDKRelay, NDKRelayStatus, NDKSubscriptionCach
 const express = require("express");
 const { nip19 } = require('nostr-tools')
 const { readFile } = require('node:fs/promises');
+const { join } = require('node:path');
 const DOMPurify = require('isomorphic-dompurify');
 
 // s flag to match newlines
@@ -218,7 +219,7 @@ const renderMeta = (e, p, langs) => {
         }
       }
 
-      // NOTE: maybe later if we start rendering the 
+      // NOTE: maybe later if we start rendering the
       // post image on the server
       // if (tags.images.length)
       //   tags.twitterType = "summary_large_image";
@@ -251,17 +252,17 @@ const renderMeta = (e, p, langs) => {
     <meta property="twitter:image" content="${san(u)}" />
     <meta property="twitter:image:alt" content="${san(tags.title)}"
     <meta property="og:image" content="${san(u)}"/>
-      `;  
+      `;
     }
     for (const u of tags.videos) {
       result += `
     <meta property="og:video" content="${san(u)}"/>
-      `;  
+      `;
     }
     for (const u of tags.audios) {
       result += `
     <meta property="og:audio" content="${san(u)}"/>
-      `;  
+      `;
     }
 
     result += `
@@ -326,7 +327,7 @@ const fetch = async (req, res, bech32, type, data) => {
       root: ROOT,
       dotfiles: 'deny'
     })
-    return    
+    return
   }
 
   let profile = event
@@ -341,11 +342,11 @@ const fetch = async (req, res, bech32, type, data) => {
   const meta = renderMeta(event, profile, langs);
 
   // read ROOT+FILE, replace %META% with our content
-  const file = await readFile(ROOT + FILE, { encoding: 'utf-8' });
+  const file = await readFile(join(ROOT, FILE), { encoding: 'utf-8' });
 
-  console.log("rendered", 
-    bech32, event.kind, 
-    nip19.npubEncode(event.pubkey), 
+  console.log("rendered",
+    bech32, event.kind,
+    nip19.npubEncode(event.pubkey),
     "in", Date.now() - start)
 
   res.send(file.replace(TMPL_RX, meta))
@@ -391,3 +392,11 @@ ndk.connect().then(() => {
     console.log(`Listening on port ${PORT}!`);
   });
 })
+
+// Graceful shutdown
+function shutdown() {
+  process.exit();
+}
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);
+process.once("SIGUSR2", shutdown);
