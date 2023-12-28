@@ -161,6 +161,7 @@ const renderMeta = (e, p, langs) => {
       twitterType: 'summary',
       siteName: '',
       userName: '',
+      htmlTitle: '',
       title: '',
       description: '',
       url: '',
@@ -187,6 +188,7 @@ const renderMeta = (e, p, langs) => {
 
     if (e.kind === 0) {
       tags.title = `${username || 'Profile'} on Nostr (${shortNpub})`;
+      tags.htmlTitle = tags.title
       tags.description = `${meta.about}`
       tags.images.push(meta.picture);
       tags.url = `${URL_TMPL.replace("<bech32>", npub)}`
@@ -257,6 +259,9 @@ const renderMeta = (e, p, langs) => {
       tags.title = `${type} by ${tags.userName} on Nostr, ${date}`;
       tags.description = `${body}`;
 
+      // this is for google
+      tags.htmlTitle = `${tags.userName}: ${body.substring(0, 60)}...`
+
       // now add links
       const image = getTag('image') || getTag('thumb')
       if (image)
@@ -289,7 +294,7 @@ const renderMeta = (e, p, langs) => {
     // FIXME localize?
 
     let result = `
-    <title>${san(tags.title)}</title>
+    <title>${san(tags.htmlTitle)}</title>
     <meta property="og:title" content="${san(tags.title)}"/>
     <meta property="twitter:title" content="${san(tags.title)}"/>
     <meta
