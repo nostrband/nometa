@@ -74,7 +74,7 @@ const getKindName = (kind) => {
     case 31989: return 'App recommendations';
     case 31990: return 'App info';
     case 34550: return 'Community';
-    default: return `Event of kind ${kind}`
+    default: return `Event (${kind})`
   }
 }
 
@@ -140,7 +140,7 @@ const isShortContent = (kind) => kind === 1 || kind === 1311
 const isTextContent = (kind) => isShortContent(kind) || kind === 30023 || kind === 30024
 
 function san(s) {
-  return DOMPurify.sanitize(s.replace(/[\n\r\t]/g,' '));
+  return DOMPurify.sanitize(s.replace(/[\n\r\t]/g, ' '));
 }
 
 const parseMeta = (p) => {
@@ -171,40 +171,100 @@ const renderMeta = (e, p, langs) => {
     }
 
     const npub = nip19.npubEncode(e.pubkey);
+    const shortNpub = `${npub.substring(0, 10)}...${npub.substring(npub.length - 4)}`;
 
-    tags.siteName = `${meta.display_name || meta.name || npub} on Nostr`
-    tags.userName = meta.display_name || meta.name || npub;
+    const name = meta.name?.trim() || ''
+    const displayName = meta.display_name?.trim() || ''
+
+    let username = `${displayName} / ${name}`
+    if (!displayName || !name || displayName === name)
+      username = displayName || name
+    if (username.length > 60)
+      username = `${username.substring(0, 60)}...`
+
+    tags.siteName = username || shortNpub
+    tags.userName = username || shortNpub
 
     if (e.kind === 0) {
-      tags.title = `${meta.display_name || meta.name || 'Profile'} on Nostr (${npub})`;
+      tags.title = `${username || 'Profile'} on Nostr (${shortNpub})`;
       tags.description = `${meta.about}`
       tags.images.push(meta.picture);
       tags.url = `${URL_TMPL.replace("<bech32>", npub)}`
       tags.type = "profile";
     } else {
       const getTag = (k) => e.tags.filter(t => t.length > 1 && t[0] === k).map(t => t[1])?.[0] || ''
+      const tagCount = (k) => e.tags.filter(t => t.length > 1 && t[0] === k).length
       const d = getTag('d')
       const id = (e.kind >= 10000 && e.kind < 20000)
         || (e.kind >= 30000 && e.kind < 40000)
         ? nip19.naddrEncode({ pubkey: e.pubkey, identifier: d, kind: e.kind })
         : nip19.neventEncode({ id: e.id, relays: [e.relay] });
-//        : nip19.noteEncode(e.id);
 
-      const title = `${getTag('title') || getTag('name') || ''}`;
-      const body = isShortContent(e.kind) ? e.content.substring(0, 200)
-        : (getTag('summary') || getTag('description') || getTag('alt') || '');
+      const date = new Date(e.created_at * 1000).toDateString()
+
+      const header = `${getTag('title') || getTag('name') || ''}`;
 
       const type = getKindName(e.kind)
 
-      tags.title = `${tags.userName} on Nostr: ${(title || body).substring(0, 60)}...`;
-      tags.description = `${type}: ${body}`;
+      let body = '';
+      switch (e.kind) {
+        case 1:
+        case 1311:
+          body = e.content;
+          break;
+        case 10000:
+        case 30000:
+          body = `${tagCount('p')} profiles`
+          break;
+        case 10001:
+        case 10003:
+        case 30003:
+        case 30004:
+          body = `${tagCount('e') + tagCount('a')} posts`
+          break;
+        case 10004:
+          body = `${tagCount('a')} communities`
+          break;
+        case 10005:
+          body = `${tagCount('e')} chats`
+          break;
+        case 10007:
+        case 30002:
+          body = `${tagCount('relay')} relays`
+          break;
+        case 10015:
+        case 30015:
+          body = `${tagCount('t')} tags`
+          break;
+        case 10030:
+        case 30030:
+          body = `${tagCount('emoji')} emojis`
+          break;
+        default:
+          body = getTag('summary') || getTag('description') || getTag('alt') || '';
+      }
+
+      // prepend header, if present
+      if (header)
+        body = `${header} - ${body}`;
+
+      // crop body
+      if (body.length > 200)
+        body = `${body.substring(0, 200)}...`;
+
+      // main event info
       tags.url = `${URL_TMPL.replace("<bech32>", id)}`
+      tags.title = `${type} by ${tags.userName} on Nostr, ${date}`;
+      tags.description = `${body}`;
+
+      // now add links
+      const image = getTag('image') || getTag('thumb')
+      if (image)
+        tags.images.push(image);
 
       const links = parseUrls(isTextContent(e.kind) ? e.content : body);
-      // console.log("links", links)
       for (const u of links) {
         const link = parseLink(u);
-        // console.log("link", link)
         switch (link.type) {
           case 'image':
             tags.images.push(link.url);
@@ -225,9 +285,8 @@ const renderMeta = (e, p, langs) => {
       //   tags.twitterType = "summary_large_image";
     }
 
-    // FIXME use 'type=profile' for kind 0
     // FIXME for each kind look for proper type, like video.movie etc
-    // FIXME localize!
+    // FIXME localize?
 
     let result = `
     <title>${san(tags.title)}</title>
@@ -366,7 +425,7 @@ app.get('/*', async (req, res) => {
         case 'nevent':
         case 'naddr':
         case 'nprofile':
-          return fetch(req, res, bech32, type, data)
+          return await fetch(req, res, bech32, type, data)
       }
     }
   } catch (e) { }
@@ -379,7 +438,7 @@ app.get('/*', async (req, res) => {
       res.sendFile(FILE, {
         root: ROOT,
         dotfiles: 'deny'
-      })
+      }, (err1) => console.log("error sending file", err1))
     } else if (err) {
       console.log("err", req.url, err)
       res.sendStatus(404)
